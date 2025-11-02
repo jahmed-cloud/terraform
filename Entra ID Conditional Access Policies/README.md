@@ -34,7 +34,29 @@ remote backend, explicit dependency management, and module validation.
     * ...and **Grant Admin Consent** for them.
 
 ---
+## 📁 Folder Structure
 
+Your project is organized to separate different types of resources.
+
+```text
+my-ca-policies/
+│
+├── modules/
+│   ├── terraform-azuread-cap/          # (For Users & Guests)
+│   └── terraform-azuread-cap-workload/ # (For Workload Identities/SPNs)
+│
+├── backend.tf                # (Remote state config)
+├── data.tf                   # (Data lookups for groups, roles, etc.)
+├── locations.tf              # (All Named Locations)
+├── policies.tf               # (All User & Guest CA Policies)
+├── policies-workload.tf      # (All Workload Identity CA Policies)
+├── provider.tf               # (Connects to Azure)
+├── variables.tf              # (Your project's inputs)
+├── terraform.tfvars          # (Your private values - IGNORED BY GIT)
+└── README.md                 # <-- You are here!
+```
+
+---
 ## ⚡ How to Use
 
 ### 1. Configure the Backend
