@@ -1,147 +1,196 @@
 # Entra ID Conditional Access as Code (Terraform)
 
-This project manages Microsoft Entra ID Conditional Access (CA) policies and
-Named Locations using Terraform.
+This project provides a complete, production-ready framework for managing Microsoft Entra ID Conditional Access (CA) policies and Named Locations using Terraform.
 
-This framework is designed to be robust, secure, and pipeline-ready by using a
-remote backend, explicit dependency management, and module validation.
+This framework is designed to be **scalable**, **reusable**, and **version-controlled**. Instead of clicking through the Azure portal, you define your entire security posture as code.
 
-## Features
+## 🚀 Features
 
-* **Modular:** A clean separation between reusable logic (`modules`) and your
-    specific configurations (`policies.tf`, `locations.tf`).
-* **Robust State:** Uses an Azure Storage Account for remote state, enabling
-    team collaboration and preventing state file loss.
-* **Dependency-Aware:** Uses `depends_on` to ensure resources are created and
-    destroyed in the correct order, preventing common API errors.
-* **Validated:** Modules include validation rules to catch typos (e.g., in IP
-    addresses or country codes) *before* you run `terraform plan`.
-* **Protected:** Includes `lifecycle { prevent_destroy = true }` on the most
-    critical policy (Block Legacy Auth) to prevent accidental deletion.
+* **Modular:** A clean separation between the reusable *logic* (the `modules`) and your specific *configurations* (the root `main.tf`).
+* **Scalable:** Add new policies or locations by adding a single, small `module` block, not by copy-pasting hundreds of lines.
+* **Dynamic:** Uses data sources to find groups and roles by their **display names**, not by hard-coding Object IDs.
+* **Comprehensive:** Includes dedicated modules for:
+    1.  **Conditional Access Policies:** The core policy engine.
+    2.  **Named Locations:** Create and manage both IP-based (like "HQ Office") and Country-based (like "Blocked Countries") locations.
 
 ---
 
-## Prerequisites
+## 📋 Prerequisites
 
-1.  **Terraform:** Version 1.0 or newer.
-2.  **Azure CLI:** Installed.
-3.  **Azure Storage Account:** You must create a Storage Account and a Blob
-    Container (e.g., named `tfstate`) to store the remote state.
-4.  **Service Principal (for Pipelines):** For automation, create a Service
-    Principal with these **Microsoft Graph (Application)** API permissions:
-    * `Policy.ReadWrite.ConditionalAccess`
-    * `Policy.Read.All`
-    * ...and **Grant Admin Consent** for them.
+Before you can use this code, you must have the following:
+
+1.  **Terraform:** Version 1.0 or newer installed.
+2.  **Authentication Credentials:** You will need a **Service Principal** (an application identity) with the following details:
+    * `tenant_id`
+    * `client_id`
+    * `client_secret`
+3.  **Permissions:** Your Service Principal **must** be assigned one of the following Entra ID roles. The least-privileged role is recommended.
+    * **Conditional Access Administrator** (Least-privileged)
+    * **Security Administrator**
+    * **Global Administrator**
 
 ---
+
 ## 📁 Folder Structure
 
-Your project is organized to separate different types of resources.
+Your project is organized into two main parts: the `modules` (the building blocks) and the *root configuration* (your implementation).
 
 ```text
 my-ca-policies/
 │
 ├── modules/
-│   ├── terraform-azuread-cap/          # (For Users & Guests)
-│   └── terraform-azuread-cap-workload/ # (For Workload Identities/SPNs)
+│   │
+│   ├── terraform-azuread-cap/          # Module for CA Policies
+│   │   ├── main.tf                     # (Policy logic)
+│   │   ├── variables.tf                # (Policy inputs)
+│   │   └── outputs.tf                  # (Policy outputs)
+│   │
+│   └── terraform-azuread-named-location/ # Module for Named Locations
+│       ├── main.tf                     # (Location logic)
+│       ├── variables.tf                # (Location inputs)
+│       └── outputs.tf                  # (Location outputs)
 │
-├── backend.tf                # (Remote state config)
-├── data.tf                   # (Data lookups for groups, roles, etc.)
-├── locations.tf              # (All Named Locations)
-├── policies.tf               # (All User & Guest CA Policies)
-├── policies-workload.tf      # (All Workload Identity CA Policies)
-├── provider.tf               # (Connects to Azure)
-├── variables.tf              # (Your project's inputs)
-├── terraform.tfvars          # (Your private values - IGNORED BY GIT)
-└── README.md                 # <-- You are here!
+├── provider.tf             # <-- You will edit this for auth
+├── policies.tf             # (Holds all your CA policies)
+├── locations.tf            # (Holds all your Named Locations)
+├── variables.tf            # (Your project's inputs)
+├── data.tf                 # (Finds existing Entra ID groups/roles)
+├── outputs.tf              # (Your project's outputs)
+├── terraform.tfvars.example  # (Example variables file)
+└── README.md               # <-- You are here!
 ```
 
 ---
-## ⚡ How to Use
 
-### 1. Configure the Backend
+## ⚡ How to Use This Code (Step-by-Step)
 
-Edit the `backend.tf` file to point to the Storage Account you created.
+### Step 1: Configure Authentication (Hard-Coded)
 
+Open the `provider.tf` file. Fill in your Service Principal's credentials directly.
+
+> 🚨 **WARNING: DO NOT** commit this file to a shared repository (like Git) with these secrets in it. This method is **not secure** and is only for quick, temporary, local testing.
+
+**`provider.tf`:**
 ```terraform
-# backend.tf
 terraform {
-  backend "azurerm" {
-    resource_group_name  = "Your-Storage-RG-Name"
-    storage_account_name = "youruniquestoragename"
-    container_name       = "tfstate"
-    key                  = "entra-id-ca.tfstate"
+  required_providers {
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 2.47"
+    }
   }
+}
+
+provider "azuread" {
+  # --- Enter your credentials below ---
+  
+  tenant_id     = "YOUR_TENANT_ID_GOES_HERE"
+  client_id     = "YOUR_CLIENT_ID_GOES_HERE"
+  client_secret = "YOUR_CLIENT_SECRET_GOES_HERE"
 }
 ```
 
-### 2. Configure Your Variables
+### Step 2: Configure Your Variables
 
-Create a `terraform.tfvars` file (and add it to `.gitignore`).
+1.  Create a new file in this main folder named `terraform.tfvars`.
+2.  Copy the content from `terraform.tfvars.example` and fill in your values.
+
+**Example `terraform.tfvars` file:**
 
 ```hcl
-# terraform.tfvars
-
+# The exact display name of your emergency access group
 break_glass_group_name = "grp-sec-BreakGlass-Admins"
 
+# Your trusted corporate office IP ranges
 hq_office_ips = [
   "203.0.113.1/32",
   "198.51.100.0/24"
 ]
 
+# Countries you want to block
 blocked_countries = [
   "KP", # North Korea
-  "IR"
+  "IR",  # Iran
 ]
 ```
 
-### 3. Choose Your Authentication Method
+### Step 3: Run Terraform
 
-#### Method A: Local Testing (Recommended)
+In your terminal, from the root `my-ca-policies/` directory, run the following commands:
 
-Use your own credentials via the Azure CLI.
-
-1.  Log in to your terminal: `az login`
-2.  Set your tenant: `az account set --tenant "YOUR_TENANT_ID"`
-3.  **Delete or comment out** the `provider "azuread"` block in `provider.tf`.
-    Terraform will automatically use your `az login` credentials.
-
-#### Method B: Pipeline / Automation (Best Practice)
-
-Do not use the `provider.tf` block. Instead, set these environment
-variables in your CI/CD pipeline:
-
-```bash
-export ARM_CLIENT_ID="your-pipeline-client-id"
-export ARM_CLIENT_SECRET="your-pipeline-client-secret"
-export ARM_TENANT_ID="your-tenant-id"
-```
-
-#### Method C: Insecure "Temp" Method
-
-Edit the `provider "azuread"` block in `provider.tf` to hard-code your
-secrets. **Do not do this in a real project.**
-
-### 4. Run Terraform
-
-1.  **Initialize:** (Run this once to set up the backend)
+1.  **Initialize the project:**
+    (This downloads the `azuread` provider and registers your local modules.)
     ```bash
     terraform init
     ```
-    *Terraform will ask to copy your state to the new backend. Type `yes`.*
 
-2.  **Plan:**
+2.  **Plan your changes:**
+    (This shows you what Terraform *will* create or change, without doing it.)
     ```bash
     terraform plan
     ```
 
-3.  **Apply:**
+3.  **Apply your configuration:**
+    (This creates the policies and locations in Entra ID. You will have to type `yes` to approve.)
     ```bash
     terraform apply
     ```
 
-4.  **Destroy:**
-    (This will now work correctly due to the `depends_on` blocks.)
-    ```bash
-    terraform destroy
-    ```
+---
+
+## 🧑‍💻 How to Add New Policies and Locations
+
+This is the most common task you will do. You **do not** need to edit the `modules` folders. You only edit your `policies.tf` or `locations.tf` files.
+
+### How to Add a New Conditional Access Policy
+
+1.  Open the root `policies.tf` file.
+2.  Go to the bottom and paste in a new `module` block.
+3.  Give it a unique name (e.g., `ca_block_high_risk_users`) and set the `policy_name`.
+4.  Configure the inputs (like `include_groups`, `sign_in_risk_levels`, etc.) from the module's `variables.tf`.
+
+**Example: Add a new policy to block high-risk users**
+
+```terraform
+# --- Add this block to your policies.tf ---
+
+module "ca_block_high_risk_users" {
+  source = "./modules/terraform-azuread-cap"
+
+  policy_name  = "CA-005: Block High-Risk Users"
+  policy_state = "enabled"
+
+  # ---Assignments---
+  include_users = ["All"]
+  exclude_groups = [data.azuread_group.break_glass.object_id]
+
+  # ---Conditions---
+  # This targets any user flagged as "High" risk by Entra ID Protection
+  user_risk_levels = ["high"]
+
+  # ---Controls---
+  block_access = true
+}
+```
+
+### How to Add a New Named Location
+
+1.  Open the root `locations.tf` file.
+2.  Paste in the `module "terraform-azuread-named-location"` block.
+3.  Give it a unique name (e.g., `named_location_branch_offices`) and set the inputs.
+4.  (Optional) You can immediately use the output (`module.named_location_branch_offices.location_id`) in another policy.
+
+**Example: Add a "Branch Offices" location**
+
+```terraform
+# --- Add this block to your locations.tf ---
+
+module "named_location_branch_offices" {
+  source = "./modules/terraform-azuread-named-location"
+
+  display_name  = "NL-003: Branch Offices"
+  location_type = "ip"
+  ip_ranges     = ["192.0.2.0/24"] # You can get this from a var
+  is_trusted    = true
+}
+```
