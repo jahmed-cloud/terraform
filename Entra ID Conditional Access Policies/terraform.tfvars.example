@@ -1,0 +1,16 @@
+# Rename this file to "terraform.tfvars"
+# DO NOT commit terraform.tfvars to Git.
+
+break_glass_group_name = "Your-Emergency-Access-Group-Name"
+
+# --- New variables for locations ---
+hq_office_ips = [
+  "203.0.113.1/32",
+  "198.51.100.0/24"
+]
+
+blocked_countries = [
+  "KP", # North Korea
+  "IR", # Iran
+  "SY"  # Syria
+]
