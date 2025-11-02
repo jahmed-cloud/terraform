@@ -123,5 +123,3 @@ secrets. **Do not do this in a real project.**
     ```bash
     terraform destroy
     ```
-=======
-# Entra-ID-Conditional-Access-Policies
